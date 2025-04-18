@@ -6,6 +6,7 @@
 //github: https://github.com/Deepinder-Singh841-Git/web322-Ass5.git
 //vercel: https://web322-ass5-hakj.vercel.app/
 
+require('pg');
 const authData = require('./auth-service.js');
 const express = require('express');
 const path = require('path');
