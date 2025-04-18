@@ -1,86 +1,113 @@
-const mongoose = require('mongoose');
-const bcrypt = require('bcryptjs');
+const { Sequelize, DataTypes } = require('sequelize');
+const sequelize = require('./path-to-your-sequelize-config'); // Import your existing Sequelize instance
 
-const Schema = mongoose.Schema;
-
-let userSchema = new Schema({
-    userName: { type: String, unique: true },
-    password: String,
-    email: String,
-    loginHistory: [{
-        dateTime: Date,
-        userAgent: String
-    }]
+// Define User model
+const User = sequelize.define('User', {
+    userName: {
+        type: DataTypes.STRING,
+        allowNull: false,
+        unique: true
+    },
+    password: {
+        type: DataTypes.STRING,
+        allowNull: false
+    },
+    email: {
+        type: DataTypes.STRING,
+        allowNull: false,
+        unique: true,
+        validate: {
+            isEmail: true
+        }
+    }
+}, {
+    timestamps: true
 });
 
-let User;
+// Define LoginHistory model
+const LoginHistory = sequelize.define('LoginHistory', {
+    dateTime: {
+        type: DataTypes.DATE,
+        allowNull: false,
+        defaultValue: Sequelize.NOW
+    },
+    userAgent: {
+        type: DataTypes.STRING,
+        allowNull: false
+    }
+});
 
-module.exports.initialize = function () {
-    return new Promise(function (resolve, reject) {
-        
-        let db = mongoose.createConnection(
-            "mongodb+srv://captainhero147:balebale%405002@cluster0.e5rvns3.mongodb.net/web322?retryWrites=true&w=majority",
-            {
-                useNewUrlParser: true,
-                useUnifiedTopology: true
-            }
-        );
+// Set up associations
+User.hasMany(LoginHistory);
+LoginHistory.belongsTo(User);
 
-        db.on('error', (err) => {
-            reject("MongoDB connection error: " + err);
-        });
-
-        db.once('open', () => {
-            User = db.model("users", userSchema);
-            resolve();
-        });
-    });
+module.exports.initialize = async function() {
+    try {
+        await sequelize.authenticate();
+        await sequelize.sync({ alter: true }); // Use { force: true } only in development if you need to reset tables
+        console.log('Authentication service initialized');
+        return Promise.resolve();
+    } catch (err) {
+        console.error('Error initializing auth service:', err);
+        return Promise.reject("Error initializing authentication service");
+    }
 };
 
-// Optional helper to register a user
-module.exports.registerUser = function (userData) {
+module.exports.registerUser = function(userData) {
     return new Promise(async (resolve, reject) => {
         try {
-            // Hash the password before saving
+            if (!userData.userName || !userData.password || !userData.email) {
+                return reject("Missing required fields");
+            }
+
             const hashedPassword = await bcrypt.hash(userData.password, 10);
-            const newUser = new User({
+            const user = await User.create({
                 userName: userData.userName,
                 password: hashedPassword,
-                email: userData.email,
-                loginHistory: []
+                email: userData.email
             });
 
-            await newUser.save();
-            resolve();
+            resolve(user);
         } catch (err) {
-            if (err.code === 11000) {
-                reject("Username already taken");
+            if (err.name === 'SequelizeUniqueConstraintError') {
+                if (err.errors.some(e => e.path === 'userName')) {
+                    reject("Username already taken");
+                } else if (err.errors.some(e => e.path === 'email')) {
+                    reject("Email already registered");
+                }
             } else {
-                reject("There was an error creating the user: " + err);
+                reject("Error creating user: " + err.message);
             }
         }
     });
 };
 
-// Optional helper to check login
-module.exports.checkUser = function (userData) {
+module.exports.checkUser = function(userData) {
     return new Promise(async (resolve, reject) => {
         try {
-            const user = await User.findOne({ userName: userData.userName });
-            if (!user) return reject("Unable to find user: " + userData.userName);
-
-            const match = await bcrypt.compare(userData.password, user.password);
-            if (!match) return reject("Incorrect password");
-
-            user.loginHistory.push({
-                dateTime: new Date(),
-                userAgent: userData.userAgent
+            const user = await User.findOne({
+                where: { userName: userData.userName },
+                include: [LoginHistory]
             });
 
-            await user.save();
+            if (!user) {
+                return reject(`Unable to find user: ${userData.userName}`);
+            }
+
+            const match = await bcrypt.compare(userData.password, user.password);
+            if (!match) {
+                return reject("Incorrect password");
+            }
+
+            await LoginHistory.create({
+                dateTime: new Date(),
+                userAgent: userData.userAgent,
+                UserId: user.id
+            });
+
             resolve(user);
         } catch (err) {
-            reject("There was an error verifying the user: " + err);
+            reject("Error verifying user: " + err.message);
         }
     });
 };
