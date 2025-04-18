@@ -1,0 +1,30 @@
+<h2>User Registration</h2>
+
+{{#if successMessage}}
+  <div class="alert alert-success">
+    <strong>Success:</strong> {{successMessage}}
+  </div>
+  <a class="btn btn-success pull-right" href="/login">Proceed to Log in</a><br /><br /><br />
+{{else}}
+  {{#if errorMessage}}
+    <div class="alert alert-danger">
+      <strong>Error:</strong> {{errorMessage}}
+    </div>
+  {{/if}}
+
+  <form method="POST" action="/register">
+    <div class="form-group">
+      <input type="text" name="userName" placeholder="User Name" class="form-control" value="{{userName}}" required>
+    </div>
+    <div class="form-group">
+      <input type="password" name="password" placeholder="Password" class="form-control" required>
+    </div>
+    <div class="form-group">
+      <input type="password" name="password2" placeholder="Confirm Password" class="form-control" required>
+    </div>
+    <div class="form-group">
+      <input type="email" name="email" placeholder="Email Address" class="form-control" required>
+    </div>
+    <button type="submit" class="btn btn-primary">Register</button>
+  </form>
+{{/if}}
