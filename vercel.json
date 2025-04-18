@@ -15,20 +15,14 @@
       }
     }
   ],
-   "routes": [
-    {
-      "src": "/(.*)",
-      "dest": "server.js"
-    }
-  ],
   "rewrites": [
-    {
-      "source": "/(.*)",
-      "destination": "/server.js"
-    },
     {
       "source": "/public/(.*)",
       "destination": "/public/$1"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/server.js"
     }
   ],
   "env": {
