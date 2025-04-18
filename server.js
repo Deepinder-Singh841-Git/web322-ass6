@@ -6,6 +6,7 @@
 //github: https://github.com/Deepinder-Singh841-Git/web322-Ass5.git
 //vercel: https://web322-ass5-hakj.vercel.app/
 
+require('dotenv').config();
 require('pg');
 const authData = require('./auth-service.js');
 const express = require('express');
@@ -17,14 +18,13 @@ const cloudinary = require('cloudinary').v2;
 const streamifier = require('streamifier');
 const Handlebars = require('handlebars');
 const clientSessions = require("client-sessions");
-const storage = multer.memoryStorage();
 
 const app = express();
 const HTTP_PORT = process.env.PORT || 8080;
 
-// Handlebars setup
 const hbs = expHBS.create({
     extname: '.hbs',
+    defaultLayout: 'main',
     helpers: {
         navLink: function (url, options) {
             return '<li' + ((url == app.locals.activeRoute) ? ' class="active"' : '') + '><a href="' + url + '">' + options.fn(this) + '</a></li>';
@@ -55,7 +55,6 @@ const hbs = expHBS.create({
 app.engine('.hbs', hbs.engine);
 app.set('view engine', '.hbs');
 
-// Cloudinary configuration
 cloudinary.config({
     cloud_name: process.env.CLOUDINARY_NAME || 'dfst9j74g',
     api_key: process.env.CLOUDINARY_KEY || '332178947425628',
@@ -65,7 +64,6 @@ cloudinary.config({
 
 const upload = multer();
 
-// Middleware
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 app.use(express.static('public'));
@@ -79,7 +77,7 @@ app.use(function (req, res, next) {
 
 app.use(clientSessions({
     cookieName: "session",
-    secret: "captainSecretKey543",
+    secret: process.env.SESSION_SECRET || "captainSecretKey543",
     duration: 2 * 60 * 1000,
     activeDuration: 1000 * 60
 }));
@@ -97,18 +95,12 @@ function ensureLogin(req, res, next) {
     }
 }
 
-// Routes
 app.get('/', async (req, res) => {
     try {
         const featuredItems = await storeService.getPublishedItems();
-        res.render('home', {
-            featuredItems: featuredItems.slice(0, 3) // Show first 3 published items
-        });
+        res.render('home', { featuredItems: featuredItems.slice(0, 3) });
     } catch (err) {
-        res.render('home', {
-            featuredItems: [],
-            message: "Error loading featured items"
-        });
+        res.render('home', { featuredItems: [], message: "Error loading featured items" });
     }
 });
 
@@ -116,7 +108,6 @@ app.get('/about', (req, res) => {
     res.render('about');
 });
 
-// Route for "/shop"
 app.get("/shop", async (req, res) => {
     let viewData = {};
     try {
@@ -139,7 +130,6 @@ app.get("/shop", async (req, res) => {
     res.render("shop", { data: viewData });
 });
 
-// Route for "/shop/:id"
 app.get('/shop/:id', async (req, res) => {
     let viewData = {};
     try {
@@ -166,60 +156,99 @@ app.get('/shop/:id', async (req, res) => {
     res.render("shop", { data: viewData });
 });
 
-// Route for "/items"
 app.get('/items', ensureLogin, async (req, res) => {
     try {
-        let items = await storeService.getAllItems();
-        res.render('items', { items: items });
+        const items = await storeService.getAllItems();
+        console.log('Retrieved items:', items); // Add this for debugging
+        res.render('items', { 
+            items: items,
+            categories: await storeService.getCategories() // If needed for your view
+        });
     } catch (err) {
-        res.render('items', { message: "No results found" });
+        console.error('Error fetching items:', err);
+        res.render('items', { 
+            items: [],
+            message: "Error loading items"
+        });
     }
 });
 
-app.get("/items/add", ensureLogin, (req, res) => {
-    res.render("addPost");
+app.get("/items/add", ensureLogin, async (req, res) => {
+    try {
+        const categories = await storeService.getCategories();
+        res.render("addPost", { categories });
+    } catch (err) {
+        res.render("addPost", { categories: [] });
+    }
 });
 
-// Handle adding a new item with optional image upload
-app.post("/items/add", ensureLogin, upload.single("featureImage"), (req, res) => {
-    if (req.file) {
-        let streamUpload = (req) => {
-            return new Promise((resolve, reject) => {
-                let stream = cloudinary.uploader.upload_stream((error, result) => {
-                    if (result) {
-                        resolve(result);
-                    } else {
-                        reject(error);
-                    }
-                });
+app.post("/items/add", ensureLogin, upload.single("featureImage"), async (req, res) => {
+    try {
+        console.log('Received item data:', req.body);
+        
+        // Handle image upload
+        let imageUrl = "";
+        if (req.file) {
+            console.log('Processing file upload');
+            const uploaded = await new Promise((resolve, reject) => {
+                const stream = cloudinary.uploader.upload_stream(
+                    { folder: 'items' }, // Add folder for organization
+                    (error, result) => error ? reject(error) : resolve(result)
+                );
                 streamifier.createReadStream(req.file.buffer).pipe(stream);
             });
-        };
-
-        async function upload(req) {
-            let result = await streamUpload(req);
-            return result;
+            imageUrl = uploaded.secure_url;
+            console.log('Image uploaded to:', imageUrl);
         }
 
-        upload(req).then((uploaded) => {
-            processItem(uploaded.url);
-        }).catch((error) => {
-            console.error("Cloudinary upload error:", error);
-            processItem("");
-        });
-    } else {
-        processItem("");
-    }
+        // Prepare item data
+        const itemData = {
+            ...req.body,
+            featureImage: imageUrl,
+            postDate: new Date(),
+            published: req.body.published === 'on',
+            price: parseFloat(req.body.price)
+        };
 
-    function processItem(imageUrl) {
-        req.body.featureImage = imageUrl;
-        storeService.addItem(req.body)
-            .then(() => res.redirect("/items"))
-            .catch(err => res.status(500).send("Failed to add item: " + err));
+        console.log('Final item data:', itemData);
+        
+        // Add to database
+        const newItem = await storeService.addItem(itemData);
+        console.log('Item created with ID:', newItem.id);
+        
+        // Verify the item exists
+        const createdItem = await storeService.getItemById(newItem.id);
+        console.log('Verified item:', createdItem);
+        
+        res.redirect("/items");
+        
+    } catch (err) {
+        console.error('Error adding item:', err);
+        try {
+            const categories = await storeService.getCategories();
+            res.render("addPost", {
+                categories,
+                errorMessage: "Failed to add item. Please try again.",
+                formData: req.body // Preserve form input
+            });
+        } catch (categoriesError) {
+            res.status(500).render("addPost", {
+                categories: [],
+                errorMessage: "System error"
+            });
+        }
     }
 });
 
-// Route for "/categories"
+app.get("/items/delete/:id", ensureLogin, async (req, res) => {
+    try {
+        await storeService.deletePostById(req.params.id);
+        res.redirect("/items");
+    } catch (err) {
+        res.status(500).send("Unable to Remove Post / Post not found");
+    }
+});
+
 app.get('/categories', ensureLogin, async (req, res) => {
     try {
         const categories = await storeService.getCategories();
@@ -229,12 +258,10 @@ app.get('/categories', ensureLogin, async (req, res) => {
     }
 });
 
-// GET route to show the add category form
 app.get('/categories/add', ensureLogin, (req, res) => {
     res.render('addCategory');
 });
 
-// POST route to handle category addition
 app.post('/categories/add', ensureLogin, (req, res) => {
     storeService.addCategory(req.body)
         .then(() => res.redirect('/categories'))
@@ -247,13 +274,12 @@ app.get('/categories/delete/:id', ensureLogin, (req, res) => {
         .catch(err => res.status(500).send("Unable to remove category"));
 });
 
-// Show the login form
 app.get('/login', (req, res) => {
-    res.render('login');
+    res.render('login', { errorMessage: null, username: '' });
 });
 
-// Handle login
 app.post('/login', (req, res) => {
+    req.body.userAgent = req.get('User-Agent');
     authData.checkUser(req.body)
         .then(user => {
             req.session.user = {
@@ -264,46 +290,43 @@ app.post('/login', (req, res) => {
             res.redirect('/items');
         })
         .catch(err => {
-            res.render('login', { errorMessage: err, username: req.body.user });
+            res.render('login', { errorMessage: err, username: req.body.username });
         });
 });
 
-// Show the registration form
 app.get('/register', (req, res) => {
-    res.render('register');
+    res.render('register', { errorMessage: null, successMessage: null, username: '' });
 });
 
-// Handle registration
 app.post('/register', (req, res) => {
     authData.registerUser(req.body)
         .then(() => {
-            res.render('register', { successMessage: "User created" });
+            res.render('register', { successMessage: "User created", errorMessage: null, username: '' });
         })
         .catch(err => {
-            res.render('register', { errorMessage: err, user: req.body.user });
+            res.render('register', { errorMessage: err, username: req.body.username, successMessage: null });
         });
 });
 
-// Logout
 app.get('/logout', (req, res) => {
     req.session.reset();
     res.redirect('/');
 });
 
+app.get('/userHistory', ensureLogin, (req, res) => {
+    res.render('userHistory');
+});
 
-// Custom 404 Route
 app.use((req, res) => {
     res.status(404).render("404");
 });
 
-
-// Initialize and start server
 storeService.initialize()
     .then(authData.initialize)
     .then(() => {
         app.listen(HTTP_PORT, () => {
-            console.log("app listening...");
+            console.log("Server running on port: " + HTTP_PORT);
         });
     }).catch(err => {
-        console.log("unable to start server: " + err);
+        console.log("Unable to start server: " + err);
     });
