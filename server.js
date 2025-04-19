@@ -323,21 +323,26 @@ app.post('/register', async (req, res) => {
     try {
         // Validate input
         if (!req.body.userName || !req.body.password || !req.body.email) {
-            throw new Error('All fields are required');
+            return res.render('register', {
+                errorMessage: 'All fields are required',
+                successMessage: null,
+                userName: req.body.userName
+            });
         }
+
+        // Register the user
         await authData.registerUser(req.body);
-        
-        res.render('register', { 
-            successMessage: "User created successfully!", 
-            errorMessage: null, 
-            userName: '' 
+
+        res.render('register', {
+            successMessage: 'User created successfully!',
+            errorMessage: null,
+            userName: ''
         });
-        
     } catch (err) {
-        res.render('register', { 
-            errorMessage: err.message, 
-            userName: req.body.userName, 
-            successMessage: null 
+        res.render('register', {
+            errorMessage: err.message || 'Registration failed',
+            successMessage: null,
+            userName: req.body.userName
         });
     }
 });
