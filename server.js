@@ -77,9 +77,14 @@ app.use(function (req, res, next) {
 
 app.use(clientSessions({
     cookieName: "session",
-    secret: process.env.SESSION_SECRET || "captainSecretKey543",
-    duration: 2 * 60 * 1000,
-    activeDuration: 1000 * 60
+    secret: process.env.SESSION_SECRET || "superSecretNovel123", 
+    duration: 24 * 60 * 60 * 1000, 
+    activeDuration: 1000 * 60 * 5,
+    cookie: {
+        ephemeral: false, 
+        httpOnly: true, 
+        secure: process.env.NODE_ENV === 'production' 
+    }
 }));
 
 app.use((req, res, next) => {
@@ -275,44 +280,73 @@ app.get('/categories/delete/:id', ensureLogin, (req, res) => {
 });
 
 app.get('/login', (req, res) => {
-    res.render('login', { errorMessage: null, username: '' });
+    res.render('login', { 
+        errorMessage: null, 
+        userName: '',
+        active: 'login'
+    });
 });
 
-app.post('/login', (req, res) => {
-    req.body.userAgent = req.get('User-Agent');
-    authData.checkUser(req.body)
-        .then(user => {
-            req.session.user = {
-                username: user.username,
-                email: user.email,
-                loginHistory: user.loginHistory
-            };
-            res.redirect('/items');
-        })
-        .catch(err => {
-            res.render('login', { errorMessage: err, username: req.body.username });
+app.post('/login', async (req, res) => {
+    try {
+        req.body.userAgent = req.get('User-Agent');
+        const user = await authData.checkUser(req.body);
+
+        req.session.user = {
+            userName: user.userName,
+            email: user.email,
+            loginHistory: user.loginHistory || []
+        };
+
+        res.redirect('/items');
+    } catch (err) {
+        res.render('login', { 
+            errorMessage: err.message || 'Login failed', 
+            userName: req.body.userName 
         });
+    }
 });
 
 app.get('/register', (req, res) => {
-    res.render('register', { errorMessage: null, successMessage: null, username: '' });
+    res.render('register', { 
+        errorMessage: null, 
+        successMessage: null, 
+        userName: '',
+        active: 'register'
+    });
 });
 
-app.post('/register', (req, res) => {
-    authData.registerUser(req.body)
-        .then(() => {
-            res.render('register', { successMessage: "User created", errorMessage: null, username: '' });
-        })
-        .catch(err => {
-            res.render('register', { errorMessage: err, username: req.body.username, successMessage: null });
+app.post('/register', async (req, res) => {
+    try {
+        if (!req.body.userName || !req.body.password || !req.body.email) {
+            throw new Error('All fields are required');
+        }
+        
+        if (req.body.password !== req.body.confirmPassword) {
+            throw new Error('Passwords do not match');
+        }
+
+        await authData.registerUser(req.body);
+        
+        res.render('register', { 
+            successMessage: "User created successfully!", 
+            errorMessage: null, 
+            userName: '' 
         });
+    } catch (err) {
+        res.render('register', { 
+            errorMessage: err.message, 
+            userName: req.body.userName, 
+            successMessage: null 
+        });
+    }
 });
 
 app.get('/logout', (req, res) => {
     req.session.reset();
+    res.clearCookie('session');
     res.redirect('/');
 });
-
 app.get('/userHistory', ensureLogin, (req, res) => {
     res.render('userHistory');
 });
