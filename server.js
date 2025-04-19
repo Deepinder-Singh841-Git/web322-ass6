@@ -77,13 +77,16 @@ app.use(function (req, res, next) {
 
 app.use(clientSessions({
     cookieName: "session",
-    secret: process.env.SESSION_SECRET || "superSecretNovel123", 
-    duration: 24 * 60 * 60 * 1000, 
-    activeDuration: 1000 * 60 * 5,
+    secret: process.env.SESSION_SECRET || "your-strong-secret-here",
+    duration: 24 * 60 * 60 * 1000, // 1 day
+    activeDuration: 1000 * 60 * 5, // 5 minutes
     cookie: {
-        ephemeral: false, 
-        httpOnly: true, 
-        secure: process.env.NODE_ENV === 'production' 
+        httpOnly: true,
+        // Only set secure: true in production when using HTTPS
+        secure: process.env.NODE_ENV === 'production' && !process.env.VERCEL,
+        // For Vercel specifically:
+        sameSite: 'none',
+        proxy: true // Trust the Vercel proxy
     }
 }));
 
