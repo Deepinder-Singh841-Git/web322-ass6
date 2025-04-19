@@ -321,54 +321,54 @@ app.get('/register', (req, res) => {
 
 app.post('/register', async (req, res) => {
     try {
-        // Debug: Log the received password fields
-        console.log('Received passwords:', {
-            password: req.body.password,
-            confirmPassword: req.body.confirmPassword
-        });
-
-        // Validate input
-        if (!req.body.userName || !req.body.password || !req.body.email) {
+        // 1. Validate all required fields exist
+        if (!req.body || !req.body.userName || !req.body.email) {
             throw new Error('All fields are required');
         }
-        
-        // Trim whitespace from passwords
+
+        // 2. Check password fields exist and are strings
+        if (typeof req.body.password !== 'string' || typeof req.body.confirmPassword !== 'string') {
+            throw new Error('Password fields must be text');
+        }
+
+        // 3. Trim and compare passwords
         const password = req.body.password.trim();
         const confirmPassword = req.body.confirmPassword.trim();
-        
-        // Debug: Log trimmed passwords
-        console.log('Trimmed passwords:', { password, confirmPassword });
+
+        if (password === '' || confirmPassword === '') {
+            throw new Error('Password cannot be empty');
+        }
 
         if (password !== confirmPassword) {
             throw new Error('Passwords do not match');
         }
 
-        // Debug: Before registration attempt
-        console.log('Attempting to register user:', req.body.userName);
-        
+        // 4. Validate password length
+        if (password.length < 8) {
+            throw new Error('Password must be at least 8 characters');
+        }
+
+        // 5. Proceed with registration
         await authData.registerUser({
-            userName: req.body.userName,
-            password: password, // Use the trimmed version
-            email: req.body.email
+            userName: req.body.userName.trim(),
+            email: req.body.email.trim(),
+            password: password // already trimmed
         });
-        
-        res.render('register', { 
-            successMessage: "User created successfully!", 
-            errorMessage: null, 
-            userName: '' 
+
+        res.render('register', {
+            successMessage: "User created successfully!",
+            errorMessage: null,
+            userName: ''
         });
+
     } catch (err) {
-        // Debug: Registration error
-        console.error('Registration error:', err);
-        
-        res.render('register', { 
-            errorMessage: err.message, 
-            userName: req.body.userName, 
-            successMessage: null 
+        res.render('register', {
+            errorMessage: err.message,
+            userName: req.body.userName || '',
+            successMessage: null
         });
     }
 });
-
 app.get('/logout', (req, res) => {
     req.session.reset();
     res.clearCookie('session');
