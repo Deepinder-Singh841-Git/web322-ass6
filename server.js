@@ -325,11 +325,6 @@ app.post('/register', async (req, res) => {
         if (!req.body.userName || !req.body.password || !req.body.email) {
             throw new Error('All fields are required');
         }
-        
-        if (req.body.password !== req.body.confirmPassword) {
-            throw new Error('Passwords do not match');
-        }
-
         await authData.registerUser(req.body);
         
         res.render('register', { 
@@ -337,6 +332,7 @@ app.post('/register', async (req, res) => {
             errorMessage: null, 
             userName: '' 
         });
+        
     } catch (err) {
         res.render('register', { 
             errorMessage: err.message, 
