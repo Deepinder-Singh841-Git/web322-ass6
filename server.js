@@ -3,8 +3,8 @@
 //Date: 2021-08-15
 //Purpose: Assignment 4
 //class: web322 NII
-//github: https://github.com/Deepinder-Singh841-Git/web322-Ass5.git
-//vercel: https://web322-ass5-hakj.vercel.app/
+//github: https://github.com/Deepinder-Singh841-Git/web322-ass6.git
+//vercel: https://web322-ass6-new.vercel.app/
 
 require('dotenv').config();
 require('pg');
