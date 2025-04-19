@@ -321,54 +321,31 @@ app.get('/register', (req, res) => {
 
 app.post('/register', async (req, res) => {
     try {
-        // 1. Validate all required fields exist
-        if (!req.body || !req.body.userName || !req.body.email) {
+        // Validate input
+        if (!req.body.userName || !req.body.password || !req.body.email) {
             throw new Error('All fields are required');
         }
-
-        // 2. Check password fields exist and are strings
-        if (typeof req.body.password !== 'string' || typeof req.body.confirmPassword !== 'string') {
-            throw new Error('Password fields must be text');
-        }
-
-        // 3. Trim and compare passwords
-        const password = req.body.password.trim();
-        const confirmPassword = req.body.confirmPassword.trim();
-
-        if (password === '' || confirmPassword === '') {
-            throw new Error('Password cannot be empty');
-        }
-
-        if (password !== confirmPassword) {
+        
+        if (req.body.password !== req.body.confirmPassword) {
             throw new Error('Passwords do not match');
         }
 
-        // 4. Validate password length
-        if (password.length < 8) {
-            throw new Error('Password must be at least 8 characters');
-        }
-
-        // 5. Proceed with registration
-        await authData.registerUser({
-            userName: req.body.userName.trim(),
-            email: req.body.email.trim(),
-            password: password // already trimmed
+        await authData.registerUser(req.body);
+        
+        res.render('register', { 
+            successMessage: "User created successfully!", 
+            errorMessage: null, 
+            userName: '' 
         });
-
-        res.render('register', {
-            successMessage: "User created successfully!",
-            errorMessage: null,
-            userName: ''
-        });
-
     } catch (err) {
-        res.render('register', {
-            errorMessage: err.message,
-            userName: req.body.userName || '',
-            successMessage: null
+        res.render('register', { 
+            errorMessage: err.message, 
+            userName: req.body.userName, 
+            successMessage: null 
         });
     }
 });
+
 app.get('/logout', (req, res) => {
     req.session.reset();
     res.clearCookie('session');
